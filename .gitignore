@@ -1,0 +1,20 @@
+# Backend
+traffic_violation_project/venv/
+__pycache__/
+*.pyc
+
+# Frontend
+helmet-violation-frontend/node_modules/
+
+# Models & media
+*.h5
+*.mp4
+*.avi
+*.mov
+
+# Environment
+.env
+traffic_violation_project/helmet_dataset/
+*.png
+*.jpg
+*.jpeg
