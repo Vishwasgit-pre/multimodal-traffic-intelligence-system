@@ -1,141 +1,193 @@
 # 🚦 Multimodal Traffic Intelligence System
 
-> **Note on Repository Name**  
-> This repository is named **helmet-violation-system** for legacy reasons.  
-> The project has since evolved into a broader system and is now called  
-> **Multimodal Traffic Intelligence System**, covering image- and video-based
-> traffic safety analysis with temporal intelligence.
+> **Repository Note**  
+> This repository was originally created as **helmet-violation-system** and later
+> evolved into a broader system. The current implementation and scope are aligned
+> with the name **Multimodal Traffic Intelligence System**.
 
 ---
 
-## 📌 Project Overview
+## 📌 Problem Statement
 
-The **Multimodal Traffic Intelligence System** is a lightweight, deployable AI-based
-traffic safety analysis platform that processes **both images and videos** to detect
-helmet compliance and derive **temporal traffic warnings**.
+Road safety violations such as **riding without a helmet**, **erratic riding behavior**,
+and **unsafe traffic patterns** are major contributors to accidents. While large-scale
+traffic monitoring systems exist, they are often:
 
-The system is designed to be:
-- Honest (no false precision)
+- Expensive
+- Hardware-dependent
+- Resource-heavy
+- Difficult to deploy at smaller checkpoints
+
+There is a need for a **lightweight, software-based, AI-driven traffic intelligence system**
+that can operate using **images and videos** and provide **interpretable results**.
+
+---
+
+## 🎯 Solution Overview
+
+This project presents a **multimodal AI system** capable of:
+
+- Detecting helmet compliance from images
+- Analyzing helmet usage patterns in videos
+- Generating **temporal traffic warnings**
+- Mapping violations to traffic rules
+- Providing an intuitive frontend for live demonstration
+
+The system is intentionally designed to be:
+- Honest (no false claims of precision)
 - Explainable
-- Resource-efficient
-- Suitable for edge or low-resource environments
+- Scalable for future extensions
 
 ---
 
-## 🧠 Key Capabilities
+## 🧠 Machine Learning Implementation (Backend)
 
-### 🪖 Image Helmet Detection
-- Detects helmet compliance from a single image
-- Uses a trained deep learning classifier
-- Outputs:
-  - Compliance / Violation
-  - Confidence score
-  - Applicable traffic rule (Section 129 – Helmet Mandatory)
+### 🔹 Model Type
+- **Convolutional Neural Network (CNN)**
+- Transfer learning using **MobileNetV2**
+- Binary classification:
+  - Helmet
+  - No Helmet
 
----
+### 🔹 Training Details
+- Dataset: Custom curated helmet / no-helmet image dataset
+- Input size: 224 × 224
+- Loss function: Binary Crossentropy
+- Optimizer: Adam
+- Framework: TensorFlow + Keras
 
-### 🎥 Video Traffic Analysis
-- Processes videos frame-by-frame
-- Aggregates helmet and no-helmet frames
-- Outputs:
-  - Helmet frame count
-  - No-helmet frame count
-  - Severity level (Low / Medium / High)
-  - Confidence estimation
+The model was trained locally on a CPU-based environment,
+keeping the architecture lightweight for real-world deployability.
 
----
-
-### ⏱️ Temporal Frame-Based Warnings
-- Derived from **temporal inconsistencies** across video frames
-- Does NOT rely on calibrated sensors or speed data
-- Includes:
-  - Erratic riding behavior (Detected / Not Detected)
-  - Indicative speed pattern analysis
-
-> ⚠️ **Disclaimer**  
-> Temporal warnings are **indicative** and based on frame-level analysis,
-> not real-world calibrated measurements.
+### 🔹 Why CNN + Transfer Learning?
+- Efficient for image-based tasks
+- Works well with limited datasets
+- Faster convergence
+- Suitable for edge or low-resource devices
 
 ---
 
-### 🔮 Future Traffic Intelligence (Planned)
-- 🚦 Signal jump detection (object tracking + signal state)
-- ⚡ FPS-calibrated speed estimation
-- 📸 License plate recognition (ANPR)
-- 🧠 Multi-violation policy engine
+## 🎥 Video Analysis Logic (Multimodal Aspect)
+
+Instead of training a separate heavy video model, the system uses:
+
+### 🔹 Frame-Based Temporal Analysis
+- Videos are split into frames
+- Each frame is passed through the **same trained CNN**
+- Results are aggregated across frames
+
+### 🔹 Outputs Generated
+- Helmet vs No-Helmet frame count
+- Violation severity (Low / Medium / High)
+- Confidence estimation
+- Temporal inconsistency warnings
+
+> ℹ️ **Important Disclaimer**  
+> Video warnings are **indicative** and based on temporal frame patterns,
+> not calibrated real-world measurements.
+
+This design avoids:
+- Heavy object detection models
+- Excessive GPU requirements
+- Large-scale video datasets
+
+---
+
+## ⚠️ Traffic Warnings & Policy Layer
+
+The system includes a **rule interpretation layer** that maps AI outputs to
+human-understandable warnings:
+
+- Helmet violation (Motor Vehicles Act, Section 129)
+- Indicative erratic riding detection
+- Indicative speed pattern warning
+
+These warnings are:
+- Clearly labeled
+- Not presented as legal enforcement
+- Designed for decision support, not automation
 
 ---
 
 ## 🏗️ System Architecture
 
-User Upload (Image / Video)  
+User (Image / Video Upload)  
 → React Frontend (Dashboard UI)  
 → Flask Backend (API Layer)  
-→ CNN-based Helmet Classifier  
-→ Temporal Frame Aggregation  
-→ Rule Mapping & Risk Interpretation  
+→ CNN Helmet Classifier  
+→ Frame-Level Aggregation  
+→ Rule Mapping & Severity Analysis  
+→ Interpretable Output
 
 ---
 
-## 🛠️ Tech Stack
+## 🛠️ Tech Stack & Libraries
 
 ### Frontend
 - React.js
-- Custom CSS (dashboard-style UI)
+- HTML / CSS
+- Fetch API
 
 ### Backend
-- Python
+- Python 3.10
 - Flask
 - Flask-CORS
+- OpenCV (cv2)
+- NumPy
 
 ### Machine Learning
-- TensorFlow / Keras
-- CNN-based image classifier
-- Frame-based temporal analysis for videos
+- TensorFlow 2.x
+- Keras
+- MobileNetV2 (pretrained weights)
 
 ---
 
-## 🎯 Design Philosophy
-
-- **Multimodal**: Works with both images and videos
-- **Lightweight**: No heavy object detection required
-- **Explainable**: Clear outputs, no black-box claims
-- **Scalable**: Can be extended with YOLO, ANPR, speed calibration, etc.
-
----
-
-## 🚀 How to Run the Project
+## 🚀 How to Run
 
 ### Backend
 ```
 cd traffic_violation_project
 python app.py
 ```
-Runs on: http://localhost:5000
+Runs at: http://localhost:5000
 
 ### Frontend
 ```
 cd helmet-violation-frontend
 npm start
 ```
-Runs on: http://localhost:3000
+Runs at: http://localhost:3000
 
 ---
 
-## 📊 Demo Flow (Suggested)
-1. Upload an image → View helmet compliance + confidence
-2. Upload a video → View aggregated helmet analysis
-3. Observe temporal warnings (erratic behavior, speed pattern)
-4. Discuss future scope and scalability
+## 📊 Demo Walkthrough
+
+1. Upload an image → Helmet compliance + confidence
+2. Upload a video → Aggregated helmet analysis
+3. Observe temporal warnings
+4. Discuss scalability and future extensions
 
 ---
 
-## 📌 Final Notes
-- The project intentionally avoids false precision.
-- All warnings are clearly labeled as indicative.
-- The system prioritizes **engineering honesty** and **real-world feasibility**.
+## 🔮 Future Scope
+
+- Traffic signal violation detection
+- FPS-calibrated speed estimation
+- License plate recognition (ANPR)
+- Multi-violation policy engine
+- Real-time camera feed integration
 
 ---
 
-**Author:**  
-Vishwas
+## 🎯 Key Takeaways
+
+- Multimodal (image + video)
+- Lightweight & deployable
+- Honest AI (no overclaiming)
+- Extendable architecture
+
+---
+
+## 👤 Author
+
+**Vishwas**
