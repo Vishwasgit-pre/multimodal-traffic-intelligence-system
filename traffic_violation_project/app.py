@@ -9,13 +9,12 @@ import tempfile
 app = Flask(__name__)
 CORS(app)
 
-# Load trained model
 model = tf.keras.models.load_model("helmet_model.h5")
 
 IMG_SIZE = 224
 THRESHOLD = 0.5
+ERRATIC_FLIP_THRESHOLD = 3   # number of state changes to flag erratic behaviour
 
-# ---------- FRAME PREDICTION ----------
 def predict_frame(frame):
     frame = cv2.resize(frame, (IMG_SIZE, IMG_SIZE))
     frame = frame / 255.0
@@ -23,7 +22,6 @@ def predict_frame(frame):
     pred = model.predict(frame, verbose=0)[0][0]
     return float(pred)
 
-# ---------- MAIN DETECTION API ----------
 @app.route("/detect", methods=["POST"])
 def detect():
     file = request.files["file"]
@@ -38,7 +36,6 @@ def detect():
 
         pred = predict_frame(img)
 
-        # ✅ CORRECT MAPPING
         if pred < THRESHOLD:
             result = "HELMET"
             confidence = round((1 - pred) * 100, 2)
@@ -75,7 +72,6 @@ def detect():
 
         pred = predict_frame(frame)
 
-        # ✅ CORRECT MAPPING
         if pred < THRESHOLD:
             helmet_frames += 1
             frame_results.append("HELMET")
@@ -85,20 +81,28 @@ def detect():
 
     cap.release()
 
-    # ✅ SAFE FILE CLEANUP (Windows-safe)
     try:
         os.remove(video_path)
     except:
         pass
 
-    violation = no_helmet_frames > helmet_frames
+    # ---------- ERRATIC BEHAVIOUR LOGIC ----------
+    flips = 0
+    for i in range(1, len(frame_results)):
+        if frame_results[i] != frame_results[i - 1]:
+            flips += 1
 
+    erratic = flips >= ERRATIC_FLIP_THRESHOLD
+
+    violation = no_helmet_frames > helmet_frames
     rule_status = "VIOLATED" if violation else "COMPLIANT"
 
     return jsonify({
         "helmet_frames": helmet_frames,
         "no_helmet_frames": no_helmet_frames,
         "violation": violation,
+        "erratic_behavior": erratic,
+        "flip_count": flips,
         "rule": {
             "name": "Helmet Mandatory Rule (Section 129, Motor Vehicles Act)",
             "status": rule_status
@@ -107,6 +111,5 @@ def detect():
         "frame_results": frame_results
     })
 
-# ---------- RUN SERVER ----------
 if __name__ == "__main__":
     app.run(debug=True)
