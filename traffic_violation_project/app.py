@@ -5,153 +5,108 @@ import numpy as np
 import cv2
 import os
 import tempfile
-import time
 
 app = Flask(__name__)
-
-# Enable CORS
-CORS(app, resources={
-    r"/*": {
-        "origins": [
-            "http://localhost:3000",
-            "http://127.0.0.1:3000",
-            "http://localhost:3001",
-            "http://127.0.0.1:3001"
-        ]
-    }
-})
+CORS(app)
 
 # Load trained model
-MODEL_PATH = "helmet_model.h5"
-model = tf.keras.models.load_model(MODEL_PATH)
+model = tf.keras.models.load_model("helmet_model.h5")
 
 IMG_SIZE = 224
+THRESHOLD = 0.5
 
+# ---------- FRAME PREDICTION ----------
+def predict_frame(frame):
+    frame = cv2.resize(frame, (IMG_SIZE, IMG_SIZE))
+    frame = frame / 255.0
+    frame = np.expand_dims(frame, axis=0)
+    pred = model.predict(frame, verbose=0)[0][0]
+    return float(pred)
 
-# -----------------------------
-# Utility: preprocess image
-# -----------------------------
-def preprocess_image(img):
-    img = cv2.resize(img, (IMG_SIZE, IMG_SIZE))
-    img = img / 255.0
-    img = np.expand_dims(img, axis=0)
-    return img
-
-
-# -----------------------------
-# Predict single image
-# NOTE: Model outputs probability of NO HELMET
-# -----------------------------
-def predict_image(img):
-    img = preprocess_image(img)
-    pred = model.predict(img)[0][0]
-    return pred
-
-
-# -----------------------------
-# Main detect endpoint
-# -----------------------------
+# ---------- MAIN DETECTION API ----------
 @app.route("/detect", methods=["POST"])
 def detect():
-    if "file" not in request.files:
-        return jsonify({"error": "No file provided"}), 400
-
     file = request.files["file"]
     filename = file.filename.lower()
 
-    # Create temp file safely (Windows-safe)
-    suffix = os.path.splitext(filename)[1]
-    temp = tempfile.NamedTemporaryFile(delete=False, suffix=suffix)
-    file.save(temp.name)
-    temp.close()  # IMPORTANT for Windows
+    # ================= IMAGE =================
+    if filename.endswith((".jpg", ".jpeg", ".png")):
+        img = cv2.imdecode(
+            np.frombuffer(file.read(), np.uint8),
+            cv2.IMREAD_COLOR
+        )
 
-    try:
-        # ================= IMAGE =================
-        if filename.endswith((".jpg", ".jpeg", ".png")):
-            img = cv2.imread(temp.name)
+        pred = predict_frame(img)
 
-            if img is None:
-                return jsonify({"error": "Invalid image"}), 400
-
-            pred = predict_image(img)
-
-            # ✅ FIXED LABEL LOGIC
-            if pred < 0.5:
-                result = "HELMET"
-                confidence = (1 - pred) * 100
-            else:
-                result = "NO HELMET"
-                confidence = pred * 100
-
-            return jsonify({
-                "type": "image",
-                "result": result,
-                "confidence": round(confidence, 2)
-            })
-
-
-        # ================= VIDEO =================
-        elif filename.endswith((".mp4", ".avi", ".mov")):
-            cap = cv2.VideoCapture(temp.name)
-
-            if not cap.isOpened():
-                return jsonify({"error": "Invalid video"}), 400
-
-            frame_count = 0
-            helmet_frames = 0
-            no_helmet_frames = 0
-
-            print("\n🎥 VIDEO ANALYSIS STARTED")
-
-            while True:
-                ret, frame = cap.read()
-                if not ret:
-                    break
-
-                frame_count += 1
-
-                # Sample every 10th frame (fast + stable)
-                if frame_count % 10 != 0:
-                    continue
-
-                pred = predict_image(frame)
-
-                # ✅ FIXED LABEL LOGIC
-                if pred < 0.5:
-                    helmet_frames += 1
-                    print(f"Frame {frame_count}: ✅ HELMET")
-                else:
-                    no_helmet_frames += 1
-                    print(f"Frame {frame_count}: 🚨 NO HELMET")
-
-            cap.release()
-
-            violation = no_helmet_frames > helmet_frames
-
-            return jsonify({
-                "type": "video",
-                "frames_processed": helmet_frames + no_helmet_frames,
-                "helmet_frames": helmet_frames,
-                "no_helmet_frames": no_helmet_frames,
-                "violation": violation
-            })
-
+        # ✅ CORRECT MAPPING
+        if pred < THRESHOLD:
+            result = "HELMET"
+            confidence = round((1 - pred) * 100, 2)
+            rule_status = "COMPLIANT"
         else:
-            return jsonify({"error": "Unsupported file type"}), 400
+            result = "NO_HELMET"
+            confidence = round(pred * 100, 2)
+            rule_status = "VIOLATED"
 
-    finally:
-        # ✅ SAFE CLEANUP (no crash on Windows)
-        try:
-            time.sleep(0.2)  # allow file handles to close
-            if os.path.exists(temp.name):
-                os.remove(temp.name)
-        except PermissionError:
-            print("⚠️ Temp file cleanup skipped (still in use)")
+        return jsonify({
+            "result": result,
+            "confidence": confidence,
+            "rule": {
+                "name": "Helmet Mandatory Rule (Section 129, Motor Vehicles Act)",
+                "status": rule_status
+            }
+        })
 
+    # ================= VIDEO =================
+    with tempfile.NamedTemporaryFile(delete=False) as temp:
+        file.save(temp.name)
+        video_path = temp.name
 
+    cap = cv2.VideoCapture(video_path)
 
-# -----------------------------
-# Run app
-# -----------------------------
+    helmet_frames = 0
+    no_helmet_frames = 0
+    frame_results = []
+
+    while cap.isOpened():
+        ret, frame = cap.read()
+        if not ret:
+            break
+
+        pred = predict_frame(frame)
+
+        # ✅ CORRECT MAPPING
+        if pred < THRESHOLD:
+            helmet_frames += 1
+            frame_results.append("HELMET")
+        else:
+            no_helmet_frames += 1
+            frame_results.append("NO_HELMET")
+
+    cap.release()
+
+    # ✅ SAFE FILE CLEANUP (Windows-safe)
+    try:
+        os.remove(video_path)
+    except:
+        pass
+
+    violation = no_helmet_frames > helmet_frames
+
+    rule_status = "VIOLATED" if violation else "COMPLIANT"
+
+    return jsonify({
+        "helmet_frames": helmet_frames,
+        "no_helmet_frames": no_helmet_frames,
+        "violation": violation,
+        "rule": {
+            "name": "Helmet Mandatory Rule (Section 129, Motor Vehicles Act)",
+            "status": rule_status
+        },
+        "speed_estimation": "Moderate (Indicative)",
+        "frame_results": frame_results
+    })
+
+# ---------- RUN SERVER ----------
 if __name__ == "__main__":
-    app.run(debug=True, port=5000)
+    app.run(debug=True)
